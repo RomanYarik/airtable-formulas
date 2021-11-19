@@ -19,7 +19,14 @@ import {
     repeatReducer,
     findReducer,
 } from '../src/services/statements/reducers/string-operations';
-import { andReducer, orReducer, xorReducer, ifReducer } from '../src/services/statements/reducers/logical-operations';
+import {
+    andReducer,
+    orReducer,
+    xorReducer,
+    ifReducer,
+    trueReducer,
+    switchReducer,
+} from '../src/services/statements/reducers/logical-operations';
 
 describe('Formula', () => {
     describe('reducers', () => {
@@ -48,16 +55,13 @@ describe('Formula', () => {
 
         describe('string', () => {
             it('&', () => {
-                const formula = new Formula();
                 const s1 = new Statement('test' as string, stringValueReducer);
                 const a = new Statement('a' as string, stringValueReducer);
-                const b = new Statement(('b' as string) as string, stringValueReducer);
+                const b = new Statement('b' as string as string, stringValueReducer);
                 const c = new Statement('c' as string, fieldReducer);
 
-                formula.setStatement(new Statement([a, s1], joinStringsReducer));
-                expect(formula.getStringifiedFormula()).to.eq('"a" & "test"');
-                formula.setStatement(new Statement([a, b, c, s1], joinStringsReducer));
-                expect(formula.getStringifiedFormula()).to.eq('"a" & "b" & c & "test"');
+                expect(new Statement([a, s1], joinStringsReducer).stringValue()).to.eq('"a" & "test"');
+                expect(new Statement([a, b, c, s1], joinStringsReducer).stringValue).to.eq('"a" & "b" & c & "test"');
             });
 
             it('ARRAYJOIN([item1, item2, item3], separator)', () => {
@@ -246,14 +250,41 @@ describe('Formula', () => {
                 const b = new Statement('b' as string, fieldReducer);
                 const c = new Statement('c' as string, fieldReducer);
 
-                const ifStatement = new Statement([a, b, c], ifReducer);
+                const ifStatementTouple: [Statement<string>, Statement<string>, Statement<string>] = [a, b, c];
+
+                const ifStatement = new Statement(ifStatementTouple, ifReducer);
                 f.setStatement(ifStatement);
 
                 expect(f.getStringifiedFormula()).to.eq(`IF(a, b, c)`);
-                const doubleIfStatement = new Statement([a, ifStatement, ifStatement], ifReducer);
+                const aaa = [a, ifStatement, ifStatement] as const;
+                const doubleIfStatement = new Statement(aaa, ifReducer);
                 f.setStatement(doubleIfStatement);
 
                 expect(f.getStringifiedFormula()).to.eq(`IF(a, IF(a, b, c), IF(a, b, c))`);
+            });
+            it('SWITCH', () => {
+                const f = new Formula();
+                const pattern = new Statement('fieldValue', fieldReducer);
+                const case1 = new Statement('case1', stringValueReducer);
+                const res1 = new Statement('res1', stringValueReducer);
+                const case2 = new Statement('case2', fieldReducer);
+                const res2 = new Statement('res2', fieldReducer);
+                const case3 = new Statement('', trueReducer);
+                const res3 = new Statement(3, numberValueReducer);
+
+                expect(
+                    new Statement(
+                        {
+                            pattern,
+                            cases: [
+                                [case1, res1],
+                                [case2, res2],
+                                [case3, res3],
+                            ],
+                        },
+                        switchReducer,
+                    ),
+                );
             });
         });
     });

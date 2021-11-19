@@ -1,7 +1,7 @@
 import { Statement } from '../statement';
 
-export const joinStringsReducer = (statements: Statement<string>[]) => {
-    return statements.map(s => s.stringValue()).join(' & ');
+export const joinStringsReducer = <K>(statements: Statement<K>[]) => {
+    return statements.map((s) => s.stringValue()).join(' & ');
 };
 
 export type ArrayJoinParams = {
@@ -11,11 +11,11 @@ export type ArrayJoinParams = {
 
 export const arrayJoinReducer = ({ parts, separator }: ArrayJoinParams) =>
     `ARRAYJOIN(${JSON.stringify(
-        Array.isArray(parts) ? parts.map(s => s.stringValue()) : parts.stringValue(),
+        Array.isArray(parts) ? parts.map((s) => s.stringValue()) : parts.stringValue(),
     )}, "${separator}")`;
 
 export const concatReducer = (statements: Statement<string>[]) =>
-    `CONCATENATE(${statements.map(s => s.stringValue()).join(', ')})`;
+    `CONCATENATE(${statements.map((s) => s.stringValue()).join(', ')})`;
 
 export const stringValueReducer = (val: string) => `\"${val}\"`;
 
@@ -27,11 +27,13 @@ export type StringAndNumberStatements = {
 };
 export const fieldReducer = (val: string) => (val.indexOf(' ') !== -1 ? `{${val}}` : val);
 
-const oneArgumentReducersGenerator = (op: string) => (statement: Statement<string>) =>
+export const oneArgumentReducersGenerator = (op: string) => (statement: Statement<string>) =>
     `${op}(${statement.stringValue()})`;
 
-const twoArgumentReducersGenerator = (op: string) => ({ statement, number }: StringAndNumberStatements) =>
-    `${op}(${statement.stringValue()}, ${number.stringValue()})`;
+const twoArgumentReducersGenerator =
+    (op: string) =>
+    ({ statement, number }: StringAndNumberStatements) =>
+        `${op}(${statement.stringValue()}, ${number.stringValue()})`;
 
 export const encodeUrlComponentReducer = oneArgumentReducersGenerator('ENCODE_URL_COMPONENT');
 export const stingLenReducer = oneArgumentReducersGenerator('LEN');
