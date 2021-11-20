@@ -1,11 +1,12 @@
-import { Statement } from "./statements/statement";
+import { Statement } from './statements/statement';
 
-export class Formula {
-  private statement: Statement<any> | undefined;
-  setStatement<K extends Statement<any>>(statement: K) {
-    this.statement = statement;
-  }
-  getStringifiedFormula() {
-    return this.statement?.stringValue();
-  }
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export class Formula<STATEMENT = any> {
+    private statement: Statement<STATEMENT> | undefined;
+    setStatement<K extends Statement<STATEMENT>>(statement: K): void {
+        this.statement = statement;
+    }
+    build(): string | undefined {
+        return this.statement?.compile();
+    }
 }

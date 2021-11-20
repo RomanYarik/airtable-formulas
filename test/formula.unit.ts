@@ -4,7 +4,6 @@ import { Statement } from '../src/services/statements/statement';
 import {
     joinStringsReducer,
     arrayJoinReducer,
-    stringValueReducer,
     fieldReducer,
     concatReducer,
     encodeUrlComponentReducer,
@@ -14,278 +13,376 @@ import {
     textValueReducer,
     toLowerCaseReducer,
     leftReducer,
-    numberValueReducer,
+    numericValueReducer,
     rightReducer,
     repeatReducer,
     findReducer,
+    midReducer,
+    replaceReducer,
+    searchReducer,
+    substituteReducer,
+    stringValueReducer,
 } from '../src/services/statements/reducers/string-operations';
 import {
     andReducer,
     orReducer,
     xorReducer,
     ifReducer,
-    trueReducer,
     switchReducer,
+    caseReducer,
 } from '../src/services/statements/reducers/logical-operations';
+import {
+    LogicalOperators,
+    NumericOperators,
+    operatorReducerGenerator,
+} from '../src/services/statements/reducers/operators';
 
 describe('Formula', () => {
     describe('reducers', () => {
-        describe('base', () => {
+        xdescribe('base', () => {
             it('value reducer', () => {
                 const formula = new Formula();
-                const s = new Statement('value', stringValueReducer);
+                const s = new Statement(stringValueReducer, 'value');
                 formula.setStatement(s);
-                expect(formula.getStringifiedFormula()).to.eql(`\"value\"`);
+                expect(formula.build()).to.eql(`\"value\"`);
             });
 
             it('field reducer', () => {
                 const formula = new Formula();
-                const s = new Statement('value', fieldReducer);
+                const s = new Statement(fieldReducer, 'value');
                 formula.setStatement(s);
-                expect(formula.getStringifiedFormula()).to.eq('value');
+                expect(formula.build()).to.eq('value');
             });
 
             it('field reducer with space', () => {
                 const formula = new Formula();
-                const s = new Statement('a value', fieldReducer);
+                const s = new Statement(fieldReducer, 'a value');
                 formula.setStatement(s);
-                expect(formula.getStringifiedFormula()).to.eq('{a value}');
+                expect(formula.build()).to.eq('{a value}');
             });
         });
 
-        describe('string', () => {
+        xdescribe('string', () => {
             it('&', () => {
-                const s1 = new Statement('test' as string, stringValueReducer);
-                const a = new Statement('a' as string, stringValueReducer);
-                const b = new Statement('b' as string as string, stringValueReducer);
-                const c = new Statement('c' as string, fieldReducer);
+                const formula = new Formula();
+                const s1 = new Statement(stringValueReducer, 'test');
+                const a = new Statement(stringValueReducer, 'a');
+                const b = new Statement(stringValueReducer, 'b');
+                const c = new Statement(fieldReducer, 'c');
 
-                expect(new Statement([a, s1], joinStringsReducer).stringValue()).to.eq('"a" & "test"');
-                expect(new Statement([a, b, c, s1], joinStringsReducer).stringValue).to.eq('"a" & "b" & c & "test"');
+                formula.setStatement(new Statement(joinStringsReducer, [a, s1]));
+                expect(formula.build()).to.eq('"a" & "test"');
+                formula.setStatement(new Statement(joinStringsReducer, [a, b, c, s1]));
+                expect(formula.build()).to.eq('"a" & "b" & c & "test"');
             });
 
             it('ARRAYJOIN([item1, item2, item3], separator)', () => {
                 const formula = new Formula();
-                const a = new Statement('a' as string, fieldReducer);
-                const b = new Statement('b' as string, fieldReducer);
-                const c = new Statement('c' as string, fieldReducer);
+                const a = new Statement(fieldReducer, 'a');
+                const b = new Statement(fieldReducer, 'b');
+                const c = new Statement(fieldReducer, 'c');
                 formula.setStatement(
-                    new Statement(
-                        {
-                            parts: [a, b, c],
-                            separator: ' ;',
-                        },
-                        arrayJoinReducer,
-                    ),
+                    new Statement(arrayJoinReducer, {
+                        parts: [a, b, c],
+                        separator: ' ;',
+                    }),
                 );
-                expect(formula.getStringifiedFormula()).to.eq(`ARRAYJOIN(["a","b","c"], " ;")`);
+                expect(formula.build()).to.eq(`ARRAYJOIN(["a","b","c"], " ;")`);
             });
 
             it('CONCATENATE(text1, [text2, ...])', () => {
                 const formula = new Formula();
-                const a = new Statement('a' as string, stringValueReducer);
-                const b = new Statement('b' as string, stringValueReducer);
-                const c = new Statement('c' as string, stringValueReducer);
-                formula.setStatement(new Statement([a], concatReducer));
-                expect(formula.getStringifiedFormula()).to.eq(`CONCATENATE("a")`);
-                formula.setStatement(new Statement([a, b], concatReducer));
-                expect(formula.getStringifiedFormula()).to.eq(`CONCATENATE("a", "b")`);
-                formula.setStatement(new Statement([a, b, c], concatReducer));
-                expect(formula.getStringifiedFormula()).to.eq(`CONCATENATE("a", "b", "c")`);
+                const a = new Statement(stringValueReducer, 'a');
+                const b = new Statement(stringValueReducer, 'b');
+                const c = new Statement(stringValueReducer, 'c');
+                formula.setStatement(new Statement(concatReducer, [a]));
+                expect(formula.build()).to.eq(`CONCATENATE("a")`);
+                formula.setStatement(new Statement(concatReducer, [a, b]));
+                expect(formula.build()).to.eq(`CONCATENATE("a", "b")`);
+                formula.setStatement(new Statement(concatReducer, [a, b, c]));
+                expect(formula.build()).to.eq(`CONCATENATE("a", "b", "c")`);
             });
 
             it('ENCODE_URL_COMPONENT(component_string)', () => {
                 const formula = new Formula();
-                const a = new Statement('a' as string, stringValueReducer);
-                formula.setStatement(new Statement(a, encodeUrlComponentReducer));
-                expect(formula.getStringifiedFormula()).to.eq(`ENCODE_URL_COMPONENT("a")`);
+                const uriComponent = new Statement(stringValueReducer, 'a');
+                formula.setStatement(new Statement(encodeUrlComponentReducer, uriComponent));
+                expect(formula.build()).to.eq(`ENCODE_URL_COMPONENT("a")`);
             });
 
             it('FIND(stringToFind, whereToSearch,[startFromPosition])', () => {
                 const formula = new Formula();
-                const a = new Statement('a' as string, stringValueReducer);
-                const longText = new Statement('a long text' as string, stringValueReducer);
-                const findStatement = new Statement(
-                    {
-                        stringToFind: a,
-                        whereToSearch: longText,
-                    },
-                    findReducer,
-                );
+                const a = new Statement(stringValueReducer, 'a');
+                const longText = new Statement(stringValueReducer, 'a long text');
+                const findStatement = new Statement(findReducer, {
+                    stringToFind: a,
+                    whereToSearch: longText,
+                });
                 formula.setStatement(findStatement);
-                expect(formula.getStringifiedFormula()).to.eq(`FIND("a", "a long text")`);
+                expect(formula.build()).to.eq(`FIND("a", "a long text")`);
 
+                const startFromPosition = new Statement(numericValueReducer, 5);
                 findStatement.setValue({
                     stringToFind: a,
                     whereToSearch: longText,
-                    startFromPosition: new Statement(5 as number, numberValueReducer),
+                    startFromPosition,
                 });
 
-                expect(formula.getStringifiedFormula()).to.eq(`FIND("a", "a long text", 5)`);
+                expect(formula.build()).to.eq(`FIND("a", "a long text", 5)`);
             });
 
             it('LEFT(string, howMany)', () => {
                 const formula = new Formula();
-                const a = new Statement('a' as string, stringValueReducer);
-                const number = new Statement(5 as number, numberValueReducer);
-                formula.setStatement(new Statement({ statement: a, number }, leftReducer));
-                expect(formula.getStringifiedFormula()).to.eq(`LEFT("a", 5)`);
+                const a = new Statement(stringValueReducer, 'a');
+                const number = new Statement(numericValueReducer, 5);
+                formula.setStatement(new Statement(leftReducer, { statement: a, number }));
+                expect(formula.build()).to.eq(`LEFT("a", 5)`);
             });
 
             it('LEN(string)', () => {
                 const formula = new Formula();
-                const a = new Statement('a' as string, stringValueReducer);
-                formula.setStatement(new Statement(a, stingLenReducer));
-                expect(formula.getStringifiedFormula()).to.eq(`LEN("a")`);
+                const a = new Statement(stringValueReducer, 'a');
+                formula.setStatement(new Statement(stingLenReducer, a));
+                expect(formula.build()).to.eq(`LEN("a")`);
             });
 
             it('LOWER(string)', () => {
                 const formula = new Formula();
-                const a = new Statement('a' as string, stringValueReducer);
-                formula.setStatement(new Statement(a, toLowerCaseReducer));
-                expect(formula.getStringifiedFormula()).to.eq(`LOWER("a")`);
+                const a = new Statement(stringValueReducer, 'a');
+                formula.setStatement(new Statement(toLowerCaseReducer, a));
+                expect(formula.build()).to.eq(`LOWER("a")`);
             });
 
-            it('MID(string, whereToStart, count');
+            it('MID(string, whereToStart, count)', () => {
+                const formula = new Formula();
+                const what = new Statement(stringValueReducer, 'quick brown fox');
+                const whereToStart = new Statement(numericValueReducer, 6);
+                const count = new Statement(numericValueReducer, 5);
+                formula.setStatement(
+                    new Statement(midReducer, {
+                        string: what,
+                        count,
+                        whereToStart,
+                    }),
+                );
 
-            it('REPLACE(string, start_character, number_of_characters, replacement)');
+                expect(formula.build()).to.eq('MID("quick brown fox", 6, 5)');
+            });
+
+            it('REPLACE(string, start_character, number_of_characters, replacement)', () => {
+                const formula = new Formula();
+                const what = new Statement(stringValueReducer, 'quick brown fox');
+                const startChar = new Statement(numericValueReducer, 6);
+                const numberOfCharachters = new Statement(numericValueReducer, 5);
+                const replacement = new Statement(stringValueReducer, 'white');
+
+                const st = new Statement(replaceReducer, {
+                    numberOfCharachters,
+                    replacement,
+                    startChar,
+                    string: what,
+                });
+                formula.setStatement(st);
+                expect(formula.build()).to.eq(`REPLACE("quick brown fox", 6, 5, "white")`);
+            });
 
             it('REPT(string, number)', () => {
                 const formula = new Formula();
-                const a = new Statement('a' as string, stringValueReducer);
-                const number = new Statement(5 as number, numberValueReducer);
-                formula.setStatement(new Statement({ statement: a, number }, repeatReducer));
-                expect(formula.getStringifiedFormula()).to.eq(`REPT("a", 5)`);
+                const a = new Statement(stringValueReducer, 'a');
+                const number = new Statement(numericValueReducer, 5);
+                formula.setStatement(new Statement(repeatReducer, { statement: a, number }));
+                expect(formula.build()).to.eq(`REPT("a", 5)`);
             });
 
             it('RIGHT(string, howMany)', () => {
                 const formula = new Formula();
-                const a = new Statement('a' as string, stringValueReducer);
-                const number = new Statement(5 as number, numberValueReducer);
-                formula.setStatement(new Statement({ statement: a, number }, rightReducer));
-                expect(formula.getStringifiedFormula()).to.eq(`RIGHT("a", 5)`);
+                const a = new Statement(stringValueReducer, 'a');
+                const number = new Statement(numericValueReducer, 5);
+                formula.setStatement(new Statement(rightReducer, { statement: a, number }));
+                expect(formula.build()).to.eq(`RIGHT("a", 5)`);
             });
 
-            it('SEARCH(stringToFind, whereToSearch,[startFromPosition])');
+            it('SEARCH(stringToFind, whereToSearch,[startFromPosition])', () => {
+                const formula = new Formula();
+                const stringToFind = new Statement(stringValueReducer, 'fox');
+                const whereToSearch = new Statement(stringValueReducer, 'quick brown fox');
+                formula.setStatement(
+                    new Statement(searchReducer, {
+                        stringToFind,
+                        whereToSearch,
+                    }),
+                );
+                expect(formula.build()).to.eq('SEARCH("fox", "quick brown fox")');
+                formula.setStatement(
+                    new Statement(searchReducer, {
+                        stringToFind,
+                        whereToSearch,
+                        startFromPosition: new Statement(numericValueReducer, 5),
+                    }),
+                );
+                expect(formula.build()).to.eq('SEARCH("fox", "quick brown fox", 5)');
+            });
 
-            it('SUBSTITUTE(string, old_text, new_text, [index])');
+            it('SUBSTITUTE(string, old_text, new_text, [index])', () => {
+                const formula = new Formula();
+                const oldText = new Statement(stringValueReducer, 'fox');
+                const newText = new Statement(stringValueReducer, 'bear');
+                const whereToSearch = new Statement(stringValueReducer, 'quick brown fox');
+                formula.setStatement(
+                    new Statement(substituteReducer, {
+                        string: whereToSearch,
+                        newText,
+                        oldText,
+                    }),
+                );
+                expect(formula.build()).to.eq('SUBSTITUTE("quick brown fox", "fox", "bear")');
+                formula.setStatement(
+                    new Statement(substituteReducer, {
+                        string: whereToSearch,
+                        newText,
+                        oldText,
+                        index: new Statement(numericValueReducer, 5),
+                    }),
+                );
+                expect(formula.build()).to.eq('SUBSTITUTE("quick brown fox", "fox", "bear", 5)');
+            });
 
             it('T(value1)', () => {
                 const formula = new Formula();
-                const a = new Statement('a' as string, stringValueReducer);
-                formula.setStatement(new Statement(a, textValueReducer));
-                expect(formula.getStringifiedFormula()).to.eq(`T("a")`);
+                const a = new Statement(stringValueReducer, 'a');
+                formula.setStatement(new Statement(textValueReducer, a));
+                expect(formula.build()).to.eq(`T("a")`);
             });
 
             it('TRIM(string)', () => {
                 const formula = new Formula();
-                const a = new Statement('a' as string, stringValueReducer);
-                formula.setStatement(new Statement(a, trimReducer));
-                expect(formula.getStringifiedFormula()).to.eq(`TRIM("a")`);
+                const a = new Statement(stringValueReducer, 'a');
+                formula.setStatement(new Statement(trimReducer, a));
+                expect(formula.build()).to.eq(`TRIM("a")`);
             });
 
             it('UPPER(string)', () => {
                 const formula = new Formula();
-                const a = new Statement('a' as string, stringValueReducer);
-                formula.setStatement(new Statement(a, toUpperCaseReducer));
-                expect(formula.getStringifiedFormula()).to.eq(`UPPER("a")`);
+                const a = new Statement(stringValueReducer, 'a');
+                formula.setStatement(new Statement(toUpperCaseReducer, a));
+                expect(formula.build()).to.eq(`UPPER("a")`);
             });
         });
 
         describe('logical', () => {
             it('AND', () => {
-                const a = new Statement('a' as string, fieldReducer);
-                const b = new Statement('b' as string, fieldReducer);
-                const c = new Statement('c' as string, fieldReducer);
-                const d = new Statement('d' as string, fieldReducer);
+                const a = new Statement(fieldReducer, 'a');
+                const b = new Statement(fieldReducer, 'b');
+                const c = new Statement(fieldReducer, 'c');
+                const d = new Statement(fieldReducer, 'd');
                 const f = new Formula();
-                const firstStatement = new Statement([a, b, c], joinStringsReducer);
-                const secondStatement = new Statement([c, d], joinStringsReducer);
-                const andStatement = new Statement([firstStatement, secondStatement], andReducer);
+                const firstStatement = new Statement(joinStringsReducer, [a, b, c]);
+                const secondStatement = new Statement(joinStringsReducer, [c, d]);
+                const andStatement = new Statement(andReducer, [firstStatement, secondStatement]);
                 f.setStatement(andStatement);
 
-                expect(f.getStringifiedFormula()).to.eq(`AND(a & b & c, c & d)`);
-                const doubleAndStatement = new Statement([andStatement, firstStatement], andReducer);
+                expect(f.build()).to.eq(`AND(a & b & c, c & d)`);
+                const doubleAndStatement = new Statement(andReducer, [andStatement, firstStatement]);
                 f.setStatement(doubleAndStatement);
 
-                expect(f.getStringifiedFormula()).to.eq(`AND(AND(a & b & c, c & d), a & b & c)`);
+                expect(f.build()).to.eq(`AND(AND(a & b & c, c & d), a & b & c)`);
             });
             it('OR', () => {
                 const f = new Formula();
-                const a = new Statement('a' as string, fieldReducer);
-                const b = new Statement('b' as string, fieldReducer);
-                const c = new Statement('c' as string, fieldReducer);
-                const d = new Statement('d' as string, fieldReducer);
-                const firstStatement = new Statement([a, b, c], joinStringsReducer);
-                const secondStatement = new Statement([c, d], joinStringsReducer);
-                const andStatement = new Statement([firstStatement, secondStatement], orReducer);
+                const a = new Statement(fieldReducer, 'a');
+                const b = new Statement(fieldReducer, 'b');
+                const c = new Statement(fieldReducer, 'c');
+                const d = new Statement(fieldReducer, 'd');
+                const firstStatement = new Statement(joinStringsReducer, [a, b, c]);
+                const secondStatement = new Statement(joinStringsReducer, [c, d]);
+                const andStatement = new Statement(orReducer, [firstStatement, secondStatement]);
                 f.setStatement(andStatement);
 
-                expect(f.getStringifiedFormula()).to.eq(`OR(a & b & c, c & d)`);
-                const doubleAndStatement = new Statement([andStatement, firstStatement], orReducer);
+                expect(f.build()).to.eq(`OR(a & b & c, c & d)`);
+                const doubleAndStatement = new Statement(orReducer, [andStatement, firstStatement]);
                 f.setStatement(doubleAndStatement);
 
-                expect(f.getStringifiedFormula()).to.eq(`OR(OR(a & b & c, c & d), a & b & c)`);
+                expect(f.build()).to.eq(`OR(OR(a & b & c, c & d), a & b & c)`);
             });
             it('XOR', () => {
                 const f = new Formula();
-                const a = new Statement('a' as string, fieldReducer);
-                const b = new Statement('b' as string, fieldReducer);
-                const c = new Statement('c' as string, fieldReducer);
-                const d = new Statement('d' as string, fieldReducer);
-                const firstStatement = new Statement([a, b, c], joinStringsReducer);
-                const secondStatement = new Statement([c, d], joinStringsReducer);
-                const andStatement = new Statement([firstStatement, secondStatement], xorReducer);
+                const a = new Statement(fieldReducer, 'a');
+                const b = new Statement(fieldReducer, 'b');
+                const c = new Statement(fieldReducer, 'c');
+                const d = new Statement(fieldReducer, 'd');
+                const firstStatement = new Statement(joinStringsReducer, [a, b, c]);
+                const secondStatement = new Statement(joinStringsReducer, [c, d]);
+                const andStatement = new Statement(xorReducer, [firstStatement, secondStatement]);
                 f.setStatement(andStatement);
 
-                expect(f.getStringifiedFormula()).to.eq(`XOR(a & b & c, c & d)`);
-                const doubleAndStatement = new Statement([andStatement, firstStatement], xorReducer);
+                expect(f.build()).to.eq(`XOR(a & b & c, c & d)`);
+                const doubleAndStatement = new Statement(xorReducer, [andStatement, firstStatement]);
                 f.setStatement(doubleAndStatement);
 
-                expect(f.getStringifiedFormula()).to.eq(`XOR(XOR(a & b & c, c & d), a & b & c)`);
+                expect(f.build()).to.eq(`XOR(XOR(a & b & c, c & d), a & b & c)`);
             });
             it('IF', () => {
                 const f = new Formula();
-                const a = new Statement('a' as string, fieldReducer);
-                const b = new Statement('b' as string, fieldReducer);
-                const c = new Statement('c' as string, fieldReducer);
+                const a = new Statement(fieldReducer, 'a');
+                const b = new Statement(fieldReducer, 'b');
+                const c = new Statement(fieldReducer, 'c');
 
                 const ifStatementTouple: [Statement<string>, Statement<string>, Statement<string>] = [a, b, c];
 
-                const ifStatement = new Statement(ifStatementTouple, ifReducer);
+                const ifStatement = new Statement(ifReducer, ifStatementTouple);
                 f.setStatement(ifStatement);
 
-                expect(f.getStringifiedFormula()).to.eq(`IF(a, b, c)`);
+                expect(f.build()).to.eq(`IF(a, b, c)`);
                 const aaa = [a, ifStatement, ifStatement] as const;
-                const doubleIfStatement = new Statement(aaa, ifReducer);
+                const doubleIfStatement = new Statement(ifReducer, aaa);
                 f.setStatement(doubleIfStatement);
 
-                expect(f.getStringifiedFormula()).to.eq(`IF(a, IF(a, b, c), IF(a, b, c))`);
+                expect(f.build()).to.eq(`IF(a, IF(a, b, c), IF(a, b, c))`);
             });
             it('SWITCH', () => {
                 const f = new Formula();
-                const pattern = new Statement('fieldValue', fieldReducer);
-                const case1 = new Statement('case1', stringValueReducer);
-                const res1 = new Statement('res1', stringValueReducer);
-                const case2 = new Statement('case2', fieldReducer);
-                const res2 = new Statement('res2', fieldReducer);
-                const case3 = new Statement('', trueReducer);
-                const res3 = new Statement(3, numberValueReducer);
+                const case1 = new Statement(caseReducer, {
+                    value: new Statement(stringValueReducer, 'case1 value'),
+                    condition: new Statement(fieldReducer, 'case1 field'),
+                });
 
-                expect(
-                    new Statement(
-                        {
-                            pattern,
-                            cases: [
-                                [case1, res1],
-                                [case2, res2],
-                                [case3, res3],
-                            ],
-                        },
-                        switchReducer,
-                    ),
+                const case2 = new Statement(caseReducer, {
+                    value: new Statement(fieldReducer, 'case2_value'),
+                    condition: new Statement(numericValueReducer, 5),
+                });
+
+                const case3 = new Statement(caseReducer, { value: new Statement(numericValueReducer, 10) });
+                f.setStatement(
+                    new Statement(switchReducer, {
+                        pattern: new Statement(fieldReducer, 'some-field'),
+                        cases: [case1, case2, case3],
+                    }),
                 );
+                expect(f.build()).to.eq('SWITCH(some-field, {case1 field}, "case1 value", 5, case2_value, 10)');
             });
+        });
+
+        describe('operators', () => {
+            for (const op of NumericOperators) {
+                const statement = new Statement(numericValueReducer, 5);
+                it(`${op}`, () => {
+                    const formula = new Formula();
+                    formula.setStatement(
+                        new Statement(operatorReducerGenerator(op), { left: statement, right: statement }),
+                    );
+                    expect(formula.build()).to.eq(`5 ${op} 5`);
+                });
+            }
+            for (const op of LogicalOperators) {
+                const statement = new Statement(stringValueReducer, 'value');
+                it(`${op}`, () => {
+                    const formula = new Formula();
+                    formula.setStatement(
+                        new Statement(operatorReducerGenerator(op), { left: statement, right: statement }),
+                    );
+                    expect(formula.build()).to.eq(`"value" ${op} "value"`);
+                });
+            }
         });
     });
 });

@@ -8,7 +8,3 @@ export interface Statement<T> {
   operation: Operations;
   stringValue(): string;
 }
-
-export type ArrayToTouple<K> = K extends Array<infer U> ? {
-   
-} :never

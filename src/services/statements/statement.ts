@@ -1,15 +1,22 @@
-export class Statement<K extends any = any, U = K extends string ? string : K> {
-    constructor(private value: U, private reducer: (args: U) => string) {}
-    getValue(): U {
+import { Reducer } from './reducers/types';
+
+export type ParseType<K> = K extends string ? string : K extends number ? number : K;
+
+export type InferArgs<K> = K extends (args: infer U) => string ? U : K;
+
+export class Statement<K, REDUCE_VALUE = string> {
+    constructor(private reducer: Reducer<REDUCE_VALUE, K>, private value: ParseType<K>) {}
+
+    getValue(): ParseType<K> {
         return this.value;
     }
-    setValue(value: U): void {
+    setValue(value: ParseType<K>): void {
         this.value = value;
     }
-    stringValue(): string {
+    compile(): REDUCE_VALUE {
         if (!this.value) {
-            return '';
+            throw new Error('Cannot compile a statement without a value');
         }
-        return this.reducer(this.value);
+        return this.reducer.reduce(this.value as K);
     }
 }
