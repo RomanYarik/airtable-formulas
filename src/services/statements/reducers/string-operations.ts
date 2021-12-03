@@ -1,176 +1,208 @@
-import { Statement } from '../statement';
-import { FunctionReducer, OP_IDENTIFIER, StringReducer } from './types';
-import { oneArgumentReducersGenerator } from './utils';
+import { FunctionNode, NumberNode, OP_IDENTIFIER, StringNode, TextNode } from './types';
+import { oneArgumentNodeGenerator } from './utils';
 
 export type ArrayJoinParams = {
-    parts: Statement<string>[] | Statement<string>;
+    parts: StringNode<string>[] | StringNode<string>;
     separator: string;
 };
 
-class JoinStringsReducer extends StringReducer<Statement<string>[]> {
+export class JoinStringsNode extends StringNode<StringNode<string>[]> {
+    constructor(value: StringNode<string>[]) {
+        super(value);
+        this.children.push(...value);
+    }
     get [OP_IDENTIFIER](): string {
         return '&';
     }
-    reduce = (statements: Statement<string>[]): string => {
-        return statements.map((s) => s.compile()).join(this[OP_IDENTIFIER]);
+    reduce = (): string => {
+        return this.value.map((s) => s.reduce()).join(` ${this[OP_IDENTIFIER]} `);
     };
 }
 
-class ArrayJoinReducer extends FunctionReducer<ArrayJoinParams> {
+export class ArrayJoinNode extends FunctionNode<ArrayJoinParams> {
+    constructor(value: ArrayJoinParams) {
+        super(value);
+        this.children.push(new TextNode(value.separator));
+        if (Array.isArray(value.parts)) {
+            this.children.push(...value.parts);
+        } else {
+            this.children.push(value.parts);
+        }
+    }
     get [OP_IDENTIFIER](): string {
         return 'ARRAYJOIN';
     }
-    reduce({ parts, separator }: ArrayJoinParams): string {
+    reduce(): string {
+        const { parts, separator } = this.value;
         return `ARRAYJOIN(${JSON.stringify(
-            Array.isArray(parts) ? parts.map((s) => s.compile()) : parts.compile(),
+            Array.isArray(parts) ? parts.map((s) => s.reduce()) : parts.reduce(),
         )}, "${separator}")`;
     }
 }
 
-class ConcatJoinReducer extends FunctionReducer<Statement<string>[]> {
+export class ConcatJoinNode extends FunctionNode<StringNode<string>[]> {
+    constructor(value: StringNode<string>[]) {
+        super(value);
+        this.children.push(...value);
+    }
     get [OP_IDENTIFIER](): string {
         return 'CONCATENATE';
     }
-    reduce(statements: Statement<string>[]): string {
-        return `CONCATENATE(${statements.map((s) => s.compile()).join(', ')})`;
+    reduce(): string {
+        return `CONCATENATE(${this.value.map((s) => s.reduce()).join(', ')})`;
     }
 }
-
-class StringValueReducer extends FunctionReducer<string> {
-    [OP_IDENTIFIER]: '"';
-    reduce(val: string): string {
-        return `\"${val}\"`;
-    }
-}
-
-class NumericValueReducer extends FunctionReducer<number> {
-    [OP_IDENTIFIER]: 'number';
-    reduce(val: number): string {
-        return `${val}`;
-    }
-}
-
-class FieldReferenceReducer extends FunctionReducer<string> {
-    [OP_IDENTIFIER]: '{value}';
-    reduce(val: string): string {
-        return `{${val}}`;
-    }
-}
-export const concatReducer = new ConcatJoinReducer();
-export const arrayJoinReducer = new ArrayJoinReducer();
-export const fieldReferenceReducer = new FieldReferenceReducer();
-export const numericValueReducer = new NumericValueReducer();
-export const stringValueReducer = new StringValueReducer();
-export const joinStringsReducer = new JoinStringsReducer();
 
 export type StringAndNumberStatements = {
-    statement: Statement<string>;
-    number: Statement<number>;
+    statement: StringNode<string>;
+    number: NumberNode;
 };
-export const fieldReducer = new (class implements StringReducer<string> {
-    [OP_IDENTIFIER]: '{';
-    reduce(val: string): string {
-        return val.indexOf(' ') !== -1 ? `{${val}}` : val;
+
+export class FieldNode extends StringNode<string> {
+    constructor(value: string) {
+        super(value);
+        this.children.push(new TextNode(value));
     }
-})();
+    [OP_IDENTIFIER]: '{';
+    reduce(): string {
+        return this.value.indexOf(' ') !== -1 ? `{${this.value}}` : this.value;
+    }
+}
 
-const twoArgumentReducersGenerator =
-    (op: string) =>
-    ({ statement, number }: StringAndNumberStatements): string =>
-        `${op}(${statement.compile()}, ${number.compile()})`;
+function twoArgumentNodesGenerator(op: string) {
+    return function (this: FunctionNode<StringAndNumberStatements>): string {
+        return `${op}(${this.value.statement.reduce()}, ${this.value.number.reduce()})`;
+    };
+}
 
-export const encodeUrlComponentReducer = oneArgumentReducersGenerator('ENCODE_URL_COMPONENT');
-export const stingLenReducer = oneArgumentReducersGenerator('LEN');
-export const toLowerCaseReducer = oneArgumentReducersGenerator('LOWER');
-export const textValueReducer = oneArgumentReducersGenerator('T');
-export const trimReducer = oneArgumentReducersGenerator('TRIM');
-export const toUpperCaseReducer = oneArgumentReducersGenerator('UPPER');
+export const EncodeUrlComponentNode = oneArgumentNodeGenerator('ENCODE_URL_COMPONENT');
+export const LenNode = oneArgumentNodeGenerator('LEN');
+export const ToLowerCaseNode = oneArgumentNodeGenerator('LOWER');
+export const TextValueNode = oneArgumentNodeGenerator('T');
+export const TrimNode = oneArgumentNodeGenerator('TRIM');
+export const ToUpperCaseNode = oneArgumentNodeGenerator('UPPER');
 
-export class LeftReducer extends FunctionReducer<StringAndNumberStatements> {
+export class LeftFunctionNode extends FunctionNode<StringAndNumberStatements> {
+    constructor(value: StringAndNumberStatements) {
+        super(value);
+        const { number, statement } = value;
+        this.children.push(...[number, statement]);
+    }
     [OP_IDENTIFIER]: 'LEFT';
-    reduce = twoArgumentReducersGenerator('LEFT');
+    reduce: () => string = twoArgumentNodesGenerator('LEFT').bind(this);
 }
 
-export class RightReducer extends FunctionReducer<StringAndNumberStatements> {
+export class RightFunctionNode extends FunctionNode<StringAndNumberStatements> {
+    constructor(value: StringAndNumberStatements) {
+        super(value);
+        const { number, statement } = value;
+        this.children.push(...[number, statement]);
+    }
     [OP_IDENTIFIER]: 'RIGHT';
-    reduce = twoArgumentReducersGenerator('RIGHT');
+    reduce: () => string = twoArgumentNodesGenerator('RIGHT').bind(this);
 }
 
-export class ReptReducer extends FunctionReducer<StringAndNumberStatements> {
+export class ReptFunctionNode extends FunctionNode<StringAndNumberStatements> {
+    constructor(value: StringAndNumberStatements) {
+        super(value);
+        const { number, statement } = value;
+        this.children.push(...[number, statement]);
+    }
     [OP_IDENTIFIER]: 'REPT';
-    reduce = twoArgumentReducersGenerator('REPT');
+    reduce: () => string = twoArgumentNodesGenerator('REPT').bind(this);
 }
 
-export const leftReducer = new LeftReducer();
-export const rightReducer = new RightReducer();
-export const repeatReducer = new RightReducer();
-
-export type FindReducerParams = {
-    stringToFind: Statement<string>;
-    whereToSearch: Statement<string>;
-    startFromPosition?: Statement<number>;
+export type FindNodeParams = {
+    stringToFind: TextNode;
+    whereToSearch: TextNode;
+    startFromPosition?: NumberNode;
 };
 
-export type MidReducerParams = {
-    string: Statement<string>;
-    whereToStart: Statement<number>;
-    count: Statement<number>;
+export type MidNodeParams = {
+    string: TextNode;
+    whereToStart: NumberNode;
+    count: NumberNode;
 };
 
-export type ReplaceReducerParams = {
-    string: Statement<string>;
-    startChar: Statement<number>;
-    numberOfCharachters: Statement<number>;
-    replacement: Statement<string>;
+export type ReplaceNodeParams = {
+    string: TextNode;
+    startChar: NumberNode;
+    numberOfCharachters: NumberNode;
+    replacement: TextNode;
 };
 
-export type SubstituteReducerParams = {
-    string: Statement<string>;
-    oldText: Statement<string>;
-    newText: Statement<string>;
-    index?: Statement<number>;
+export type SubstituteNodeParams = {
+    string: TextNode;
+    oldText: TextNode;
+    newText: TextNode;
+    index?: NumberNode;
 };
 
-class FindReducer extends FunctionReducer<FindReducerParams> {
+export class FindNode extends FunctionNode<FindNodeParams> {
+    constructor(params: FindNodeParams) {
+        super(params);
+        const { stringToFind, whereToSearch, startFromPosition } = params;
+        this.children.push(...[stringToFind, whereToSearch]);
+        if (startFromPosition) {
+            this.children.push(startFromPosition);
+        }
+    }
     [OP_IDENTIFIER]: 'FIND';
-    reduce = ({ stringToFind, whereToSearch, startFromPosition }: FindReducerParams): string =>
-        `FIND(${stringToFind.compile()}, ${whereToSearch.compile()}${
-            startFromPosition ? `, ${startFromPosition.compile()}` : ''
+    reduce = (): string =>
+        `FIND(${this.value.stringToFind.reduce()}, ${this.value.whereToSearch.reduce()}${
+            this.value.startFromPosition ? `, ${this.value.startFromPosition.reduce()}` : ''
         })`;
 }
-export const findReducer = new FindReducer();
-
-class SearchReducer extends FunctionReducer<FindReducerParams> {
+export class SearchNode extends FunctionNode<FindNodeParams> {
+    constructor(params: FindNodeParams) {
+        super(params);
+        const { stringToFind, whereToSearch, startFromPosition } = params;
+        this.children.push(...[stringToFind, whereToSearch]);
+        if (startFromPosition) {
+            this.children.push(startFromPosition);
+        }
+    }
     [OP_IDENTIFIER]: 'SEARCH';
-    reduce = ({ stringToFind, whereToSearch, startFromPosition }: FindReducerParams): string =>
-        `SEARCH(${stringToFind.compile()}, ${whereToSearch.compile()}${
-            startFromPosition ? `, ${startFromPosition.compile()}` : ''
+    reduce = (): string =>
+        `SEARCH(${this.value.stringToFind.reduce()}, ${this.value.whereToSearch.reduce()}${
+            this.value.startFromPosition ? `, ${this.value.startFromPosition.reduce()}` : ''
         })`;
 }
-export const searchReducer = new SearchReducer();
 
-export class MidReducer extends FunctionReducer<MidReducerParams> {
+export class MidNode extends FunctionNode<MidNodeParams> {
+    constructor(params: MidNodeParams) {
+        super(params);
+        const { count, string, whereToStart } = params;
+        this.children.push(...[count, string, whereToStart]);
+    }
     [OP_IDENTIFIER]: 'MID';
-    reduce = ({ string, whereToStart, count }: MidReducerParams): string =>
-        `MID(${string.compile()}, ${whereToStart.compile()}, ${count.compile()})`;
+    reduce = (): string =>
+        `MID(${this.value.string.reduce()}, ${this.value.whereToStart.reduce()}, ${this.value.count.reduce()})`;
 }
 
-export const midReducer = new MidReducer();
-
-export class ReplaceReducer extends FunctionReducer<ReplaceReducerParams> {
+export class ReplaceNode extends FunctionNode<ReplaceNodeParams> {
+    constructor(params: ReplaceNodeParams) {
+        super(params);
+        const { replacement, string, numberOfCharachters, startChar } = params;
+        this.children.push(...[replacement, string, numberOfCharachters, startChar]);
+    }
     [OP_IDENTIFIER]: 'REPLACE';
-    reduce = ({ numberOfCharachters, string, replacement, startChar }: ReplaceReducerParams): string =>
-        `REPLACE(${string.compile()}, ${startChar.compile()}, ${numberOfCharachters.compile()}, ${replacement.compile()})`;
+    reduce = (): string =>
+        `REPLACE(${this.value.string.reduce()}, ${this.value.startChar.reduce()}, ${this.value.numberOfCharachters.reduce()}, ${this.value.replacement.reduce()})`;
 }
 
-export const replaceReducer = new ReplaceReducer();
-
-export class SubstituteReducer extends FunctionReducer<SubstituteReducerParams> {
+export class SubstituteNode extends FunctionNode<SubstituteNodeParams> {
+    constructor(params: SubstituteNodeParams) {
+        super(params);
+        const { newText, string, oldText, index } = params;
+        this.children.push(...[newText, string, oldText]);
+        if (index) {
+            this.children.push(index);
+        }
+    }
     [OP_IDENTIFIER]: 'SUBSTITUTE';
-    reduce = ({ newText, string, oldText, index }: SubstituteReducerParams): string =>
-        `SUBSTITUTE(${string.compile()}, ${oldText.compile()}, ${newText.compile()}${
-            index ? `, ${index.compile()}` : ''
+    reduce = (): string =>
+        `SUBSTITUTE(${this.value.string.reduce()}, ${this.value.oldText.reduce()}, ${this.value.newText.reduce()}${
+            this.value.index ? `, ${this.value.index.reduce()}` : ''
         })`;
 }
-
-export const substituteReducer = new SubstituteReducer();
